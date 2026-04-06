@@ -1,0 +1,286 @@
+{
+  "document": {
+    "document-id": "gityard.spec.core.v2",
+    "title": "Git Yard Core Specification (Lossless Deletion Model)",
+    "tags": [
+      "gityard",
+      "git",
+      "github",
+      "lionscliapp",
+      "safety",
+      "deletion"
+    ],
+    "purpose": "Define Git Yard as a system for evaluating and executing safe deletion of local Git repositories, with explicit, non-interactive override semantics."
+  },
+  "identity": {
+    "tool-name": "gityard",
+    "framework": "lionscliapp",
+    "project-dir": ".gityard"
+  },
+  "mission": {
+    "summary": "Provide certainty about whether a local Git repository can be deleted without data loss.",
+    "core-principle": "Never perform destructive actions unless explicitly forced by the user.",
+    "primary-question": "Will I lose anything if I delete this repository?"
+  },
+  "environment": {
+    "machine-root-key": "github-checkouts",
+    "description": "Root directory containing all managed Git repositories. Scanning is restricted to one directory level."
+  },
+  "data-model": {
+    "local-repo": {
+      "description": "Represents a Git repository located in the Git Yard root.",
+      "fields": {
+        "path": {
+          "type": "string",
+          "description": "Absolute filesystem path to the repository root."
+        },
+        "repo_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Canonical GitHub identity (owner/repo). Null if no GitHub remote is detected."
+        },
+        "repo_name": {
+          "type": "string",
+          "description": "Directory name of the repository (basename of path)."
+        },
+        "remotes": {
+          "type": "object",
+          "description": "Mapping of remote names to URLs.",
+          "example": {
+            "origin": "git@github.com:LionKimbro/m1-lattice.git"
+          }
+        },
+        "default_remote": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Primary remote used for comparison (typically 'origin')."
+        },
+        "remote_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "URL of the default remote."
+        },
+        "is_dirty": {
+          "type": "boolean",
+          "description": "True if working tree has uncommitted changes."
+        },
+        "ahead_count": {
+          "type": "integer",
+          "description": "Number of commits ahead of remote."
+        },
+        "behind_count": {
+          "type": "integer",
+          "description": "Number of commits behind remote."
+        },
+        "has_untracked_files": {
+          "type": "boolean",
+          "description": "True if untracked files are present."
+        },
+        "last_commit_time": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "ISO timestamp of most recent commit."
+        },
+        "editable_install_detected": {
+          "type": "boolean",
+          "description": "True if this repository is referenced by a Python editable install (pip install -e)."
+        },
+        "editable_install_sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths to .egg-link or .pth files referencing this repo."
+        }
+      },
+      "notes": [
+        "repo_id represents identity; path represents embodiment.",
+        "Multiple local repositories may share the same repo_id.",
+        "Repositories without repo_id are treated as protected."
+      ]
+    },
+    "github-repo": {
+      "description": "Represents a repository known to exist on GitHub.",
+      "fields": {
+        "repo_id": {
+          "type": "string",
+          "description": "Canonical identity (owner/repo)."
+        },
+        "clone_url": {
+          "type": "string",
+          "description": "HTTPS clone URL."
+        },
+        "ssh_url": {
+          "type": "string",
+          "description": "SSH clone URL."
+        },
+        "is_archived": {
+          "type": "boolean",
+          "description": "True if repository is archived."
+        },
+        "updated_at": {
+          "type": "string",
+          "description": "ISO timestamp of last update."
+        }
+      }
+    },
+    "deletion-analysis": {
+      "description": "Derived evaluation of whether a repository can be safely deleted.",
+      "fields": {
+        "repo_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "on_github": {
+          "type": "boolean"
+        },
+        "is_dirty": {
+          "type": "boolean"
+        },
+        "ahead_count": {
+          "type": "integer"
+        },
+        "behind_count": {
+          "type": "integer"
+        },
+        "editable_install_detected": {
+          "type": "boolean"
+        },
+        "delete_safety": {
+          "type": "string",
+          "enum": [
+            "safe",
+            "unsafe-local-changes",
+            "protected-local-only",
+            "blocked-editable-install",
+            "unknown"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Human-readable reasons explaining the safety classification."
+        }
+      },
+      "rules": [
+        "If repo_id is null → delete_safety = protected-local-only",
+        "If editable_install_detected → delete_safety = blocked-editable-install",
+        "If ahead_count > 0 or is_dirty → delete_safety = unsafe-local-changes",
+        "If repo exists on GitHub AND ahead_count == 0 AND is_dirty == false → delete_safety = safe",
+        "Otherwise → unknown"
+      ]
+    }
+  },
+  "persistent-state": {
+    "files": {
+      "local-scan": "local-repos.json",
+      "github-scan": "github-repos.json",
+      "analysis": "deletion-analysis.json"
+    }
+  },
+  "configuration": {
+    "keys": [
+      {
+        "key": "github.user",
+        "default": "",
+        "description": "GitHub username"
+      },
+      {
+        "key": "path.root",
+        "default": "",
+        "description": "Override root path (otherwise use machine-root)"
+      }
+    ]
+  },
+  "commands": [
+    {
+      "name": "scan-local",
+      "description": "Scan Git Yard root (one level deep)",
+      "behavior": [
+        "Resolve root path",
+        "List immediate child directories",
+        "Detect .git directories",
+        "Extract metadata",
+        "Write local-repos.json"
+      ]
+    },
+    {
+      "name": "scan-github",
+      "description": "Fetch GitHub repository list"
+    },
+    {
+      "name": "analyze",
+      "description": "Compute deletion safety for all local repositories",
+      "behavior": [
+        "Load local-repos.json",
+        "Load github-repos.json",
+        "Evaluate deletion rules",
+        "Write deletion-analysis.json"
+      ]
+    },
+    {
+      "name": "status",
+      "description": "Display deletion safety summary",
+      "behavior": [
+        "Load deletion-analysis.json",
+        "Group by delete_safety",
+        "Print categorized results"
+      ]
+    },
+    {
+      "name": "delete",
+      "description": "Delete a local repository",
+      "behavior": [
+        "Lookup repository",
+        "Load deletion-analysis",
+        "If delete_safety != safe AND --force.delete != 1:",
+        "  - Print warning and reasons",
+        "  - Exit without deleting",
+        "If delete_safety == safe OR --force.delete == 1:",
+        "  - Delete repository directory"
+      ]
+    },
+    {
+      "name": "clone",
+      "description": "Clone a specific repository",
+      "behavior": [
+        "Requires explicit repo_id",
+        "Clone into root directory"
+      ]
+    }
+  ],
+  "cli-flags": {
+    "force.delete": {
+      "type": "string",
+      "values": [
+        "0",
+        "1"
+      ],
+      "default": "0",
+      "description": "Must be set to 1 to override deletion safety checks."
+    }
+  },
+  "design-principles": [
+    "No interactive prompts",
+    "No implicit consent",
+    "Destructive actions require explicit flag",
+    "Local-only repositories are protected by default",
+    "GitHub is treated as a backup reference, not authority",
+    "User retains full control at all times"
+  ]
+}

@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gityard"
+version = "0.1.0"
+description = "Evaluate and manage a machine-global yard of Git repositories."
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "CC0-1.0" }
+dependencies = [
+  "lionscliapp",
+  "machine-root",
+]
+
+[project.scripts]
+gityard = "gityard.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

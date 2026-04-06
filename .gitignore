@@ -9,6 +9,7 @@ build/
 venv/
 .venv/
 .local/
+.gityard/
 .claude/
 .focus-explorer/
 .pycard/

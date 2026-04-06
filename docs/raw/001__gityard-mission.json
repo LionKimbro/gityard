@@ -1,0 +1,42 @@
+{
+  "document": {
+    "document-id": "gityard.mission.v1",
+    "title": "Git Yard Mission",
+    "tags": [
+      "gityard",
+      "git",
+      "repositories",
+      "management"
+    ],
+    "purpose": "Define the purpose and responsibilities of Git Yard."
+  },
+  "coordinates": {
+    "conversations": {
+      "GITYARD-INITIAL": "https://chatgpt.com/c/69d2d2c4-4178-83e8-8798-699a7a4c926b"
+    },
+    "zoo-project-id": "36f949fb-5151-4e3a-bf4a-3ad9349e3b43",
+    "zookeep-repository-id": "b8e7f2d5-11f1-466c-a7eb-9f35695737dd"
+  },
+  "mission": {
+    "core-idea": "Git Yard is a system for managing a local collection of Git repositories in relation to a user's GitHub account.",
+    "responsibilities": [
+      "Watch over a designated folder containing Git repositories.",
+      "Determine whether local repositories contain work not present on GitHub.",
+      "Identify local repositories that may be safely removed.",
+      "Identify and clone repositories from GitHub that are not present locally."
+    ],
+    "scope": {
+      "focus": "Git repositories as a collection",
+      "not-focused-on": [
+        "project identity",
+        "semantic meaning of repositories",
+        "non-GitHub sources (for MVP)"
+      ]
+    },
+    "environment": {
+      "machine-global": true,
+      "location-source": "machine-root",
+      "machine-root-key": "github-checkouts"
+    }
+  }
+}
