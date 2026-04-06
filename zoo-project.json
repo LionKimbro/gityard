@@ -1,0 +1,13 @@
+{
+  "zookeep-project-guid": "b8e7f2d5-11f1-466c-a7eb-9f35695737dd",
+  "name": "gityard",
+  "repo-type": "python-2026-03",
+  "license": "CC0-1.0",
+  "repository": {
+    "name": "gityard",
+    "visibility": "public"
+  },
+  "python-package": {
+    "name": "gityard"
+  }
+}
