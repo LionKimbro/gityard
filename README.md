@@ -19,6 +19,9 @@ Builds `.gityard/deletion-analysis.json`.
 `gityard status`
 Prints the analyzed repositories grouped by deletion safety.
 
+`gityard repos`
+Prints a compact table of local repository git state, including branch, remote, and ahead/behind status.
+
 `gityard available`
 Prints GitHub repositories from `.gityard/github-repos.json` that do not appear in `.gityard/local-repos.json`.
 

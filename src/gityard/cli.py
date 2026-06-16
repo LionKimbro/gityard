@@ -66,6 +66,7 @@ def _declare_app():
     app.declare_cmd("scan", cmd_scan)
     app.declare_cmd("analyze", cmd_analyze)
     app.declare_cmd("status", cmd_status)
+    app.declare_cmd("repos", cmd_repos)
     app.declare_cmd("available", cmd_available)
     app.declare_cmd("delete", cmd_delete)
     app.declare_cmd("clone", cmd_clone)
@@ -75,6 +76,7 @@ def _declare_app():
     app.describe_cmd("scan", "Run scan-local, scan-github, and analyze in sequence")
     app.describe_cmd("analyze", "Compute deletion safety for scanned local repositories")
     app.describe_cmd("status", "Print deletion-analysis.json grouped by safety")
+    app.describe_cmd("repos", "Print a table showing local repository git state")
     app.describe_cmd("available", "List GitHub repositories not currently present locally")
     app.describe_cmd("delete", "Delete a local repository selected by --target.repo")
     app.describe_cmd("clone", "Clone --target.repo into the yard root")
@@ -146,6 +148,32 @@ def cmd_status():
             print(f"  reasons: {reason_text}")
 
 
+def cmd_repos():
+    root = _get_root_path()
+    repos = []
+    for child in sorted(root.iterdir(), key=lambda p: p.name.lower()):
+        if not child.is_dir():
+            continue
+        if not (child / ".git").exists():
+            continue
+        repos.append(_scan_local_repo(child))
+
+    rows = [
+        [
+            repo["repo_name"],
+            _repo_worktree_status(repo),
+            repo["branch"] or "(detached)",
+            repo["default_remote"] or "-",
+            _format_sync_status(repo),
+        ]
+        for repo in repos
+    ]
+    _print_table(
+        ["REPOSITORY", "DIRTY?", "BRANCH", "REMOTE", "AHEAD/BEHIND"],
+        rows,
+    )
+
+
 def cmd_available():
     local_repos = app.read_json("local-repos.json", "p")
     github_repos = app.read_json("github-repos.json", "p")
@@ -205,7 +233,7 @@ def cmd_clone():
 def _get_root_path():
     configured = app.ctx["path.root"]
     if configured:
-        root = configured
+        root = Path(configured).expanduser()
     else:
         root = Path(machineroot.get("github-checkouts")).expanduser()
 
@@ -234,6 +262,7 @@ def _scan_local_repo(repo_path):
         "remotes": remotes,
         "default_remote": default_remote,
         "remote_url": remote_url,
+        "branch": _read_current_branch(repo_path),
         "is_dirty": _has_tracked_changes(status_lines),
         "ahead_count": ahead_count,
         "behind_count": behind_count,
@@ -294,6 +323,12 @@ def _extract_repo_id(remote_url):
 def _read_status_lines(repo_path):
     output = _run_git(["status", "--porcelain"], repo_path)
     return [line for line in output.stdout.splitlines() if line.strip()]
+
+
+def _read_current_branch(repo_path):
+    output = _run_git(["branch", "--show-current"], repo_path, allow_failure=True)
+    value = output.stdout.strip()
+    return value or None
 
 
 def _has_tracked_changes(status_lines):
@@ -592,6 +627,41 @@ def _find_analysis(analyses, target):
     if len(matches) > 1:
         raise ValueError(f"Target {target!r} matched multiple repositories; use an absolute path")
     return matches[0]
+
+
+def _repo_worktree_status(repo):
+    if repo["is_dirty"] or repo["has_untracked_files"]:
+        return "dirty"
+    return "-"
+
+
+def _format_sync_status(repo):
+    if not repo["default_remote"]:
+        return "no remote"
+
+    ahead_count = repo["ahead_count"]
+    behind_count = repo["behind_count"]
+    if ahead_count == 0 and behind_count == 0:
+        return "up to date"
+    if ahead_count > 0 and behind_count > 0:
+        return f"ahead {ahead_count}, behind {behind_count}"
+    if ahead_count > 0:
+        return f"ahead {ahead_count}"
+    return f"behind {behind_count}"
+
+
+def _print_table(headers, rows):
+    widths = [len(header) for header in headers]
+    for row in rows:
+        for index, cell in enumerate(row):
+            widths[index] = max(widths[index], len(str(cell)))
+
+    def format_row(row):
+        return "  ".join(str(cell).ljust(widths[index]) for index, cell in enumerate(row))
+
+    print(format_row(headers))
+    for row in rows:
+        print(format_row(row))
 
 
 def _run_git(args, cwd, allow_failure=False):
