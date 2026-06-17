@@ -158,7 +158,7 @@ def cmd_repos():
             continue
         if not (child / ".git").exists():
             continue
-        repos.append(_scan_local_repo(child))
+        repos.append(_scan_local_repo(child, fetch_remote=True))
 
     rows = [
         [
@@ -174,6 +174,12 @@ def cmd_repos():
         ["REPOSITORY", "DIRTY?", "BRANCH", "REMOTE", "AHEAD/BEHIND"],
         rows,
     )
+    failed_fetches = [repo for repo in repos if repo.get("fetch_error")]
+    if failed_fetches:
+        print("")
+        print(f"fetch failed: {len(failed_fetches)}")
+        for repo in failed_fetches:
+            print(f"- {repo['repo_name']}: {repo['fetch_error']}")
 
 
 def cmd_pull():
@@ -290,11 +296,14 @@ def _get_root_path():
     return root
 
 
-def _scan_local_repo(repo_path):
+def _scan_local_repo(repo_path, fetch_remote=False):
     remotes = _read_remotes(repo_path)
     default_remote = _choose_default_remote(remotes)
     remote_url = remotes.get(default_remote) if default_remote else None
     repo_id = _extract_repo_id(remote_url) if remote_url else None
+    fetch_error = None
+    if fetch_remote and default_remote:
+        fetch_error = _fetch_remote_refs(repo_path)
     status_lines = _read_status_lines(repo_path)
     ahead_count, behind_count = _read_ahead_behind(repo_path)
     editable_sources = _find_editable_install_sources(repo_path)
@@ -306,6 +315,7 @@ def _scan_local_repo(repo_path):
         "remotes": remotes,
         "default_remote": default_remote,
         "remote_url": remote_url,
+        "fetch_error": fetch_error,
         "branch": _read_current_branch(repo_path),
         "is_dirty": _has_tracked_changes(status_lines),
         "ahead_count": ahead_count,
@@ -332,6 +342,13 @@ def _read_remotes(repo_path):
         if name not in remotes:
             remotes[name] = url
     return remotes
+
+
+def _fetch_remote_refs(repo_path):
+    output = _run_git(["fetch", "--quiet"], repo_path, allow_failure=True)
+    if output.returncode == 0:
+        return None
+    return _git_error_detail(output)
 
 
 def _choose_default_remote(remotes):
@@ -684,6 +701,8 @@ def _repo_has_local_changes(repo):
 
 
 def _format_sync_status(repo):
+    if repo.get("fetch_error"):
+        return "fetch failed"
     if not repo["default_remote"]:
         return "no remote"
 
@@ -721,11 +740,15 @@ def _run_git(args, cwd, allow_failure=False):
         encoding="utf-8",
     )
     if result.returncode != 0 and not allow_failure:
-        stderr = result.stderr.strip()
-        stdout = result.stdout.strip()
-        detail = stderr or stdout or f"git exited with code {result.returncode}"
+        detail = _git_error_detail(result)
         raise RuntimeError(f"git {' '.join(args)} failed in {cwd}: {detail}")
     return result
+
+
+def _git_error_detail(result):
+    stderr = result.stderr.strip()
+    stdout = result.stdout.strip()
+    return stderr or stdout or f"git exited with code {result.returncode}"
 
 
 def _handle_remove_readonly(fn, path, exc_info):

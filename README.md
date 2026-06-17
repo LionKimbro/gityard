@@ -20,7 +20,7 @@ Builds `.gityard/deletion-analysis.json`.
 Prints the analyzed repositories grouped by deletion safety.
 
 `gityard repos`
-Prints a compact table of local repository git state, including branch, remote, and ahead/behind status.
+Fetches each repository's configured remote, then prints a compact table of local repository git state, including branch, remote, and ahead/behind status.
 
 `gityard pull`
 Performs `git pull --ff-only` in each local repository that is behind its upstream and has no local changes. Also reports repositories that are behind but skipped because they are dirty.
