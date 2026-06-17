@@ -67,6 +67,7 @@ def _declare_app():
     app.declare_cmd("analyze", cmd_analyze)
     app.declare_cmd("status", cmd_status)
     app.declare_cmd("repos", cmd_repos)
+    app.declare_cmd("pull", cmd_pull)
     app.declare_cmd("available", cmd_available)
     app.declare_cmd("delete", cmd_delete)
     app.declare_cmd("clone", cmd_clone)
@@ -77,6 +78,7 @@ def _declare_app():
     app.describe_cmd("analyze", "Compute deletion safety for scanned local repositories")
     app.describe_cmd("status", "Print deletion-analysis.json grouped by safety")
     app.describe_cmd("repos", "Print a table showing local repository git state")
+    app.describe_cmd("pull", "Pull clean repositories that are behind their upstream")
     app.describe_cmd("available", "List GitHub repositories not currently present locally")
     app.describe_cmd("delete", "Delete a local repository selected by --target.repo")
     app.describe_cmd("clone", "Clone --target.repo into the yard root")
@@ -172,6 +174,48 @@ def cmd_repos():
         ["REPOSITORY", "DIRTY?", "BRANCH", "REMOTE", "AHEAD/BEHIND"],
         rows,
     )
+
+
+def cmd_pull():
+    root = _get_root_path()
+    pulled = []
+    skipped_dirty = []
+
+    for child in sorted(root.iterdir(), key=lambda p: p.name.lower()):
+        if not child.is_dir():
+            continue
+        if not (child / ".git").exists():
+            continue
+
+        repo = _scan_local_repo(child)
+        if repo["behind_count"] <= 0:
+            continue
+        if repo["ahead_count"] > 0:
+            continue
+        if _repo_has_local_changes(repo):
+            skipped_dirty.append(repo)
+            continue
+
+        print(f"pulling {repo['repo_name']} ({_format_sync_status(repo)})")
+        _run_git(["pull", "--ff-only"], child)
+        pulled.append(repo)
+
+    print("")
+    print(f"pulled: {len(pulled)}")
+    for repo in pulled:
+        print(f"- {repo['repo_name']}")
+        print(f"  branch: {repo['branch'] or '(detached)'}")
+        print(f"  remote: {repo['default_remote'] or '-'}")
+        print(f"  was: {_format_sync_status(repo)}")
+
+    print("")
+    print(f"behind but skipped because dirty: {len(skipped_dirty)}")
+    for repo in skipped_dirty:
+        print(f"- {repo['repo_name']}")
+        print(f"  branch: {repo['branch'] or '(detached)'}")
+        print(f"  remote: {repo['default_remote'] or '-'}")
+        print(f"  status: {_repo_worktree_status(repo)}")
+        print(f"  sync: {_format_sync_status(repo)}")
 
 
 def cmd_available():
@@ -630,9 +674,13 @@ def _find_analysis(analyses, target):
 
 
 def _repo_worktree_status(repo):
-    if repo["is_dirty"] or repo["has_untracked_files"]:
+    if _repo_has_local_changes(repo):
         return "dirty"
     return "-"
+
+
+def _repo_has_local_changes(repo):
+    return repo["is_dirty"] or repo["has_untracked_files"]
 
 
 def _format_sync_status(repo):
